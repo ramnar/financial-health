@@ -49,6 +49,7 @@ A curated list of financial planner organizations, personal finance educators an
 - https://www.linkedin.com/in/niteshbuddhadev/
 - Expert Tax Consultant
 
+---
 
 ## Personal Finance Educators
 
