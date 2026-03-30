@@ -31,26 +31,29 @@ A curated list of financial planner organizations, personal finance educators an
 - **Website:** https://www.immpl.com/
 - Fee-only financial planner, or free in which case they earn commission from Regular Mutual Funds.
 - **YouTube Videos:**
-  - [Overview Video](https://www.youtube.com/watch?v=Vz7VroP26Co)
+  - [Video](https://www.youtube.com/watch?v=Vz7VroP26Co)
 
 ---
 
-## Individual Financial Planners / Educators
+## Individual Financial Planners
 
 ### Manoj Arora
 - IT Employee turned Financial Planner. Not a SEBI Registered Investment Advisor.
 - Author of many books on personal finance, parenting and life.
 - Offers a [self-guided financial planning program](https://www.manoj-arora.a2hosted.com/cgi-bin/MAv2/about_elite.cgi) — a course that guides you in doing your own financial planning.
-- Has solid software to track income, expenses, net worth, financial freedom, and asset allocation.
-- Rigorous monitoring of money metrics at regular intervals throughout the year.
-- **Fee:** Pay-what-you-want model (similar to Vipassana) — nominal fee, then pay based on the value you received.
+- Good Software to track income, expenses, net worth, financial freedom, and asset allocation.
+- Monitoring of personal finance metrics at regular intervals throughout the year.
+- **Fee:** Pay-what-you-want model (similar to Vipassana) — You choose how much you want to pay based on the value you received.
+
+
+## Personal Finance Educators
 
 ### Monika Halan
 - Personal Finance Educator.
 - **Books:** https://www.monikahalan.com/books/
 
 ### Mrin Aggarwal
-- Corporate Financial Educator.
+- Personal Finance Educator in Corporates.
 - **Website:** https://www.finsafe.in/
 - **List of Financial Planners:** [How It Works](https://www.finsafe.in/financial-counselling/how-it-works/)
 
@@ -65,3 +68,4 @@ A curated list of financial planner organizations, personal finance educators an
 ## Personal Finance Case Studies
 
 - [Wint Wealth — Case Study Videos](https://www.youtube.com/@WintWealthYT/videos)
+
