@@ -11,7 +11,7 @@ A curated list of financial planner organizations, personal finance educators an
 
 ---
 
-## Professional Organizations
+## Registered Investment Advisor(RIA) Organizations
 
 ### Financialist
 - **Website:** https://thefinancialist.co/
@@ -44,6 +44,10 @@ A curated list of financial planner organizations, personal finance educators an
 - Good Software to track income, expenses, net worth, financial freedom, and asset allocation.
 - Monitoring of personal finance metrics at regular intervals throughout the year.
 - **Fee:** Pay-what-you-want model (similar to Vipassana) — You choose how much you want to pay based on the value you received.
+
+### Nitesh Buddhadev
+- https://www.linkedin.com/in/niteshbuddhadev/
+- Expert Tax Consultant
 
 
 ## Personal Finance Educators
