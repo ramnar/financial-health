@@ -1,0 +1,17 @@
+[gmail]
+gmail_address      = your@gmail.com
+gmail_app_password = xxxx xxxx xxxx xxxx
+
+[period]
+# Leave blank to default to previous calendar month
+month =
+year  =
+
+[passwords]
+icici_pdf_password   = <first4ofname><DDMM-of-DOB>
+equitas_pdf_password = <DDMM-of-DOB><FIRST3OFNAME>
+
+[paths]
+statements_dir = ./data/statements
+decrypted_dir  = ./data/decrypted
+cache_file     = ./data/transactions_cache.json
