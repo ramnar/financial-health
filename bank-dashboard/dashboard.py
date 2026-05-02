@@ -1,10 +1,9 @@
 """
 Streamlit Cashflow Dashboard
-Upload e-Statement PDFs via the sidebar, then view the dashboard.
+Run `python run.py` to fetch and parse e-Statements, then view this dashboard.
 """
 import calendar
 import sys
-from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -13,16 +12,10 @@ import plotly.express as px
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent))
-from bank_dashboard import categorizer, consolidator
-from bank_dashboard.config import get_date_range
 from bank_dashboard.consolidator import compute_cashflow
-from bank_dashboard.fetchers import pdf_fetcher
-from bank_dashboard.models import Transaction, load_transactions, save_transactions
-from bank_dashboard.parsers.equitas_pdf_parser import EquitasPdfParser
-from bank_dashboard.parsers.icici_pdf_parser import IciciPdfParser
+from bank_dashboard.models import Transaction, load_transactions
 
 CACHE_FILE = Path(__file__).parent / "data" / "transactions_cache.json"
-UPLOAD_DIR = Path(__file__).parent / "data" / "uploads"
 
 st.set_page_config(
     page_title="Cashflow Dashboard",
@@ -45,112 +38,12 @@ def _to_df(transactions: list[Transaction]) -> pd.DataFrame:
     return df
 
 
-def _process_pdfs(
-    icici_files, icici_password: str,
-    equitas_files, equitas_password: str,
-    date_start: date, date_end: date,
-) -> list[Transaction]:
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    all_transactions = []
-
-    for uploaded_file in (icici_files or []):
-        raw_path = UPLOAD_DIR / f"icici_{uploaded_file.name}"
-        raw_path.write_bytes(uploaded_file.getvalue())
-        decrypted_path = UPLOAD_DIR / f"dec_icici_{uploaded_file.name}"
-        try:
-            parsed_path = pdf_fetcher.decrypt_pdf(raw_path, icici_password or "", decrypted_path)
-        except Exception:
-            parsed_path = raw_path
-        try:
-            txns = IciciPdfParser(date_start, date_end).parse(parsed_path)
-            st.sidebar.success(f"ICICI: {len(txns)} txns from {uploaded_file.name}")
-            all_transactions.extend(txns)
-        except Exception as e:
-            st.sidebar.error(f"ICICI parse failed ({uploaded_file.name}): {e}")
-
-    for uploaded_file in (equitas_files or []):
-        raw_path = UPLOAD_DIR / f"equitas_{uploaded_file.name}"
-        raw_path.write_bytes(uploaded_file.getvalue())
-        decrypted_path = UPLOAD_DIR / f"dec_equitas_{uploaded_file.name}"
-        try:
-            parsed_path = pdf_fetcher.decrypt_pdf(raw_path, equitas_password or "", decrypted_path)
-        except Exception:
-            parsed_path = raw_path
-        try:
-            txns = EquitasPdfParser(date_start, date_end).parse(parsed_path)
-            st.sidebar.success(f"Equitas: {len(txns)} txns from {uploaded_file.name}")
-            all_transactions.extend(txns)
-        except Exception as e:
-            st.sidebar.error(f"Equitas parse failed ({uploaded_file.name}): {e}")
-
-    return all_transactions
-
-
-# ── Sidebar: Upload e-Statements ───────────────────────────────────────────────
-st.sidebar.title("Load e-Statements")
-
-today = date.today()
-year_options = list(range(today.year - 2, today.year + 1))
-
-col1, col2 = st.sidebar.columns(2)
-stmt_month = col1.selectbox(
-    "Month", list(range(1, 13)),
-    index=max(today.month - 2, 0),
-    format_func=lambda m: calendar.month_abbr[m],
-    key="stmt_month",
-)
-stmt_year = col2.selectbox("Year", year_options, index=len(year_options) - 1, key="stmt_year")
-
-st.sidebar.markdown("**ICICI Bank**")
-icici_files = st.sidebar.file_uploader(
-    "e-Statement PDFs", type="pdf", accept_multiple_files=True, key="icici_upload"
-)
-icici_password = st.sidebar.text_input(
-    "PDF Password", type="password", key="icici_pwd", placeholder="Leave blank if not encrypted"
-)
-
-st.sidebar.markdown("**Equitas Bank**")
-equitas_files = st.sidebar.file_uploader(
-    "e-Statement PDFs", type="pdf", accept_multiple_files=True, key="equitas_upload"
-)
-equitas_password = st.sidebar.text_input(
-    "PDF Password", type="password", key="equitas_pwd", placeholder="Leave blank if not encrypted"
-)
-
-if st.sidebar.button(
-    "Process PDFs",
-    type="primary",
-    disabled=not (icici_files or equitas_files),
-):
-    date_start, date_end = get_date_range(stmt_month, stmt_year)
-    with st.spinner("Processing PDFs..."):
-        transactions = _process_pdfs(
-            icici_files, icici_password,
-            equitas_files, equitas_password,
-            date_start, date_end,
-        )
-    if transactions:
-        transactions = consolidator.consolidate(transactions)
-        for t in transactions:
-            t.category = categorizer.categorize(t.description, t.type)
-        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        save_transactions(transactions, CACHE_FILE)
-        st.cache_data.clear()
-        st.rerun()
-    else:
-        st.sidebar.warning("No transactions found in the uploaded PDFs.")
-
-st.sidebar.divider()
-
 # ── Load cached data ───────────────────────────────────────────────────────────
 if not CACHE_FILE.exists():
     st.title("Cashflow Dashboard")
     st.info(
-        "Upload your bank e-Statement PDFs in the sidebar to get started.\n\n"
-        "1. Select the statement month and year.\n"
-        "2. Upload ICICI and/or Equitas PDFs.\n"
-        "3. Enter the PDF password if applicable.\n"
-        "4. Click **Process PDFs**."
+        "No data found. Run the pipeline to fetch your bank statements:\n\n"
+        "```\npython run.py --month 3 --year 2026\n```"
     )
     st.stop()
 

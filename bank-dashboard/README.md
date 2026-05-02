@@ -1,6 +1,6 @@
 # Bank Dashboard
 
-A personal cashflow dashboard that parses ICICI and Equitas bank e-Statement PDFs and displays spending summaries, charts, and transaction history in a Streamlit web app.
+A personal cashflow dashboard that fetches ICICI and Equitas bank e-Statement PDFs from Gmail and displays spending summaries, charts, and transaction history in a Streamlit web app.
 
 ---
 
@@ -27,7 +27,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Configure credentials (optional — only needed for Gmail fetch via `run.py`)
+### 3. Configure credentials
 
 Copy the template and fill in your details:
 
@@ -51,50 +51,30 @@ equitas_pdf_password = <DDMM-of-DOB><FIRST3OFNAME>
 
 ---
 
-## Running the Dashboard
+## Usage
 
-### Option 1 — Upload PDFs directly (recommended)
-
-Launch the Streamlit app:
-
-```bash
-venv/bin/streamlit run dashboard.py --server.headless true --browser.gatherUsageStats false
-```
-
-Then open your browser at:
-
-```
-http://localhost:8501
-```
-
-**Steps in the dashboard:**
-
-1. In the sidebar, select the **statement month and year**.
-2. Upload your **ICICI e-Statement PDF(s)** under "ICICI Bank".
-3. Upload your **Equitas e-Statement PDF(s)** under "Equitas Bank".
-4. Enter the **PDF password** for each bank (leave blank if not encrypted).
-5. Click **Process PDFs**.
-
-The dashboard will parse the PDFs and display your cashflow summary, charts, and transaction table.
-
----
-
-### Option 2 — Fetch e-Statements from Gmail (`run.py`)
-
-This fetches e-Statement PDF attachments directly from your Gmail inbox (transaction alert emails are ignored — only e-statement PDFs are processed).
+### Step 1 — Fetch e-Statements and parse transactions
 
 ```bash
 # Previous month (default)
 venv/bin/python run.py
 
 # Specific month
-venv/bin/python run.py --month 3 --year 2025
+venv/bin/python run.py --month 3 --year 2026
 
-# Parse only, skip launching Streamlit
-venv/bin/python run.py --no-dashboard --month 3 --year 2025
+# Fetch and parse only, skip launching Streamlit
+venv/bin/python run.py --no-dashboard --month 3 --year 2026
 ```
 
-This requires a valid `config.ini` with Gmail credentials. The parsed transactions are cached to `data/transactions_cache.json` and the dashboard launches automatically.
+This fetches e-Statement PDF attachments directly from Gmail, parses transactions, and caches them to `data/transactions_cache.json`. The dashboard launches automatically unless `--no-dashboard` is passed.
+
+### Step 2 — View the dashboard
+
+If you used `--no-dashboard`, launch the dashboard separately:
+
+```bash
+venv/bin/streamlit run dashboard.py --server.headless true --browser.gatherUsageStats false
+```
 
 ---
 
@@ -116,8 +96,8 @@ hostname -I | awk '{print $1}'
 
 ```
 bank-dashboard/
-├── dashboard.py              # Streamlit web app
-├── run.py                    # Gmail fetch + parse pipeline
+├── dashboard.py              # Streamlit web app (read-only, displays cached data)
+├── run.py                    # Gmail fetch + parse + cache pipeline
 ├── requirements.txt
 ├── config.ini                # Your credentials (not committed)
 ├── config.ini.template       # Credentials template
@@ -127,7 +107,7 @@ bank-dashboard/
 │   ├── categorizer.py        # Spending category rules
 │   ├── consolidator.py       # Deduplication and cashflow summary
 │   ├── fetchers/
-│   │   ├── gmail_fetcher.py  # Gmail IMAP fetcher (e-statements only)
+│   │   ├── gmail_fetcher.py  # Gmail IMAP fetcher
 │   │   └── pdf_fetcher.py    # PDF decryption
 │   └── parsers/
 │       ├── icici_pdf_parser.py
@@ -135,6 +115,5 @@ bank-dashboard/
 └── data/
     ├── statements/           # Downloaded PDF attachments
     ├── decrypted/            # Decrypted PDFs
-    ├── uploads/              # PDFs uploaded via dashboard
     └── transactions_cache.json
 ```
