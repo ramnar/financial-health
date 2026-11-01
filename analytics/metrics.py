@@ -48,16 +48,45 @@ def load_data(data_dir: Path) -> dict[str, pd.DataFrame]:
     return out
 
 
+def _read_ini(path: Path) -> configparser.ConfigParser:
+    cfg = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
+    cfg.read(path, encoding="utf-8")
+    return cfg
+
+
 def load_targets(path: Path) -> pd.DataFrame:
-    cfg = configparser.ConfigParser()
-    cfg.read(path)
+    """Recommended range per asset class (only the asset-class sections of the file)."""
+    cfg = _read_ini(path)
     rows = []
-    for cls in cfg.sections():
+    for cls in ASSET_CLASSES:
+        if cls not in cfg:
+            continue
         low, high = cfg[cls].get("low", ""), cfg[cls].get("high", "")
         rows.append({"asset_class": cls,
                      "low": float(low) if low else np.nan,
                      "high": float(high) if high else np.nan})
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=["asset_class", "low", "high"])
+
+
+def load_settings(path: Path) -> dict:
+    """CPI, financial-independence and emergency-fund settings from targets.ini."""
+    cfg = _read_ini(path)
+    cpi = cfg["CPI"] if "CPI" in cfg else {}
+    fi = cfg["Financial Independence"] if "Financial Independence" in cfg else {}
+    ef = cfg["Emergency Fund"] if "Emergency Fund" in cfg else {}
+
+    def num(section, key, default=np.nan):
+        value = section.get(key, "") if section else ""
+        return float(value) if value.strip() else default
+
+    return {
+        "cpi_pct": num(cpi, "annual_inflation_pct"),
+        "cpi_as_of": cpi.get("as_of", "") if cpi else "",
+        "fi_target": num(fi, "target_amount"),
+        "fi_real_return_pct": num(fi, "expected_real_return_pct", 8.0),
+        "ef_assets": [a.strip() for a in (ef.get("assets", "") if ef else "").split(",") if a.strip()],
+        "ef_min_months": num(ef, "minimum_months", 6.0),
+    }
 
 
 # ── Portfolio ─────────────────────────────────────────────────────────────────
@@ -92,6 +121,33 @@ def asset_tree(asset_split: pd.DataFrame) -> pd.DataFrame:
     a = asset_split[(asset_split["level"] == "asset") & (asset_split["value"] > 0)].copy()
     a["asset_class"] = a["name"].map(ASSET_TO_CLASS).fillna("Other")
     return a[["asset_class", "name", "value"]].reset_index(drop=True)
+
+
+def invested_assets(asset_split: pd.DataFrame) -> float:
+    """Portfolio value excluding 'Other' items such as a rent deposit."""
+    tree = asset_tree(asset_split)
+    return float(tree.loc[tree["asset_class"] != "Other", "value"].sum())
+
+
+def months_to_target(start: float, monthly_saving: float, real_return_pct: float,
+                     target: float, limit: int = 1200) -> int | None:
+    """Months until start + monthly savings, compounding monthly, reach target. None if never."""
+    value, months = start, 0
+    growth = (1 + real_return_pct / 100) ** (1 / 12)
+    while value < target:
+        if months >= limit:
+            return None
+        value = value * growth + monthly_saving
+        months += 1
+    return months
+
+
+def emergency_runway(asset_split: pd.DataFrame, assets: list[str],
+                     avg_monthly_expense: float) -> tuple[float, float]:
+    """Liquid amount (the named assets) and how many months of spending it covers."""
+    a = asset_split[asset_split["level"] == "asset"]
+    liquid = float(a.loc[a["name"].isin(assets), "value"].sum())
+    return liquid, liquid / avg_monthly_expense if avg_monthly_expense else np.nan
 
 
 def latest_targets(strategy: pd.DataFrame) -> dict[str, float]:
@@ -194,6 +250,93 @@ def total_inflation(expense_heads: pd.DataFrame) -> pd.Series:
     return pd.Series({f"infl_{n}y": 100 * (totals.loc[latest, "monthly_avg"]
                                            / totals.loc[latest - n, "monthly_avg"] - 1) / n
                       for n in (1, 2, 3)})
+
+
+def spending_movers(expense_heads: pd.DataFrame, n: int = 3) -> pd.DataFrame:
+    """The n heads whose average monthly spend rose most and fell most vs the year before."""
+    hi = head_inflation(expense_heads)
+    latest = max(c for c in hi.columns if isinstance(c, (int, np.integer)))
+    df = pd.DataFrame({"head": hi.index, "change": hi[latest] - hi[latest - 1],
+                       "pct": hi["infl_1y"]}).reset_index(drop=True)
+    up = df[df["change"] > 0].nlargest(n, "change")
+    down = df[df["change"] < 0].nsmallest(n, "change")
+    return pd.concat([up, down.iloc[::-1]], ignore_index=True)
+
+
+def cash_flow_split(breakup: pd.DataFrame, cashflow: pd.DataFrame,
+                    expense_heads: pd.DataFrame, top_n: int = 4) -> dict:
+    """
+    Income sources and where the money went, for the income-flow chart.
+
+    Uses the last complete month when its head-wise breakup was captured; otherwise
+    falls back to the latest year's head-wise totals (income as one total).
+    """
+    month = cashflow["month"].max()
+    rows = breakup[breakup["month"] == month]
+    if not rows.empty:
+        income = rows[(rows["category"] == "Income") & (rows["amount"] > 0)]
+        income = list(zip(income["head"], income["amount"]))
+        expenses = rows[(rows["category"] == "Expense") & (rows["amount"] > 0)][["head", "amount"]]
+        label = f"{month:%B %Y}"
+    else:
+        year = month.year
+        income = [(f"Income {year}", float(cashflow.loc[cashflow["month"].dt.year == year, "income"].sum()))]
+        y = expense_heads[(expense_heads["year"] == year) & (expense_heads["annual"] > 0)]
+        expenses = y.rename(columns={"annual": "amount"})[["head", "amount"]]
+        label = f"{year} so far (Jan–{month:%b})"
+
+    expenses = expenses.sort_values("amount", ascending=False)
+    top, rest = expenses.head(top_n), expenses.iloc[top_n:]
+    out = list(zip(top["head"], top["amount"]))
+    if not rest.empty:
+        out.append((f"Other ({len(rest)} heads)", float(rest["amount"].sum())))
+    total_in = sum(v for _, v in income)
+    saved = total_in - expenses["amount"].sum()
+    return {"label": label, "monthly": not rows.empty, "income": income,
+            "expenses": out, "saved": saved, "total_income": total_in}
+
+
+def action_items(status: pd.DataFrame, missing_months: list[str], expense_heads: pd.DataFrame,
+                 last12: pd.DataFrame, runway_months: float, min_months: float,
+                 fmt=lambda v: f"₹{v:,.0f}") -> list[dict]:
+    """
+    Flags for the Summary tab, most urgent first.
+    Each item: {"level": critical|warning|info|good, "title": str, "detail": str}.
+    """
+    items = []
+    if runway_months < min_months:
+        items.append({"level": "critical", "title": f"Emergency fund covers {runway_months:.1f} months",
+                      "detail": f"Below your {min_months:.0f}-month minimum"})
+    for r in status.itertuples():
+        if r.status in ("Below range", "Above range"):
+            verb = "Add" if r.rebalance_amount > 0 else "Reduce by"
+            items.append({"level": "warning",
+                          "title": f"{r.asset_class} {r.pct:.1f}%, {r.status.lower()} {r.low:.0f}–{r.high:.0f}%",
+                          "detail": f"{verb} {fmt(abs(r.rebalance_amount))} to get back in range"})
+    if missing_months:
+        items.append({"level": "warning", "title": "Portfolio not updated",
+                      "detail": " and ".join([", ".join(missing_months[:-1]), missing_months[-1]]
+                                             if len(missing_months) > 1 else missing_months)})
+    # Heads with a big jump that also matter in rupees (≥ ₹1,000 a month now)
+    hi = head_inflation(expense_heads)
+    latest = max(c for c in hi.columns if isinstance(c, (int, np.integer)))
+    jumps = hi[(hi["infl_1y"] >= 40) & (hi[latest] >= 1000)].nlargest(3, "infl_1y")
+    if not jumps.empty:
+        first, *others = list(jumps.itertuples())
+        items.append({"level": "info", "title": f"{first.Index} up {first.infl_1y:.0f}% on last year",
+                      "detail": ", ".join(f"{o.Index} +{o.infl_1y:.0f}%" for o in others) or "Average monthly spend"})
+    below = last12[last12["savings"] < last12["savings_baseline"]]
+    if not below.empty:
+        items.append({"level": "info",
+                      "title": f"Savings below baseline in {len(below)} of the last {len(last12)} months",
+                      "detail": ", ".join(below["month"].dt.strftime("%b %Y"))})
+    in_range = status.loc[status["status"] == "In range", "asset_class"].tolist()
+    if in_range:
+        items.append({"level": "good", "title": f"{', '.join(in_range)} in range", "detail": "No action needed"})
+    if runway_months >= min_months:
+        items.append({"level": "good", "title": f"Emergency fund covers {runway_months:.1f} months",
+                      "detail": f"Above your {min_months:.0f}-month minimum"})
+    return items
 
 
 def top_heads(expense_heads: pd.DataFrame, year: int, n: int = 12) -> pd.DataFrame:

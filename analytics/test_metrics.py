@@ -57,6 +57,48 @@ class PureLogic(unittest.TestCase):
         self.assertEqual(out.loc["Real Estate", "status"], "No recommendation")
 
 
+class SummaryLogic(unittest.TestCase):
+    def test_months_to_target(self):
+        self.assertEqual(m.months_to_target(100.0, 10.0, 0.0, 150.0), 5)
+        self.assertEqual(m.months_to_target(200.0, 10.0, 8.0, 150.0), 0)   # already reached
+        self.assertIsNone(m.months_to_target(0.0, 0.0, 0.0, 1.0))          # never
+
+    def test_emergency_runway_uses_named_assets_only(self):
+        split = pd.DataFrame({"level": ["asset"] * 3 + ["asset_class"],
+                              "name": ["Cash", "Stocks", "Debt Fund", "Debt Based Investments"],
+                              "value": [60.0, 500.0, 40.0, 40.0]})
+        liquid, months = m.emergency_runway(split, ["Cash", "Debt Fund"], 20.0)
+        self.assertEqual((liquid, months), (100.0, 5.0))
+
+    def test_settings_and_ranges_read_from_one_file(self):
+        path = ROOT / "data_sample" / "targets.ini"
+        s = m.load_settings(path)
+        self.assertEqual(s["ef_assets"], ["ExpenseFund", "Mutual Fund Debt"])
+        self.assertEqual((s["cpi_pct"], s["fi_real_return_pct"]), (4.0, 8.0))
+        # Settings sections must not leak into the asset-class ranges
+        self.assertEqual(set(m.load_targets(path)["asset_class"]), set(m.ASSET_CLASSES))
+
+    def test_cash_flow_split_falls_back_to_year(self):
+        cf = pd.DataFrame({"month": pd.to_datetime(["2026-01-01", "2026-02-01"]),
+                           "income": [100.0, 100.0], "expense": [30.0, 30.0]})
+        eh = pd.DataFrame({"head": ["Rent", "Food"], "year": 2026, "annual": [40.0, 20.0],
+                           "monthly_avg": [20.0, 10.0]})
+        empty = pd.DataFrame(columns=["month", "category", "head", "amount"])
+        flow = m.cash_flow_split(empty, cf, eh)
+        self.assertFalse(flow["monthly"])
+        self.assertEqual((flow["total_income"], flow["saved"]), (200.0, 140.0))
+
+    def test_action_items_flag_out_of_range_and_low_runway(self):
+        status = pd.DataFrame({"asset_class": ["Equity"], "pct": [70.0], "low": [40.0], "high": [60.0],
+                               "status": ["Above range"], "rebalance_amount": [-10.0]})
+        eh = pd.DataFrame({"head": ["Rent"] * 4, "year": [2023, 2024, 2025, 2026],
+                           "annual": 0.0, "monthly_avg": [100.0, 100.0, 100.0, 100.0]})
+        last12 = pd.DataFrame({"month": pd.to_datetime(["2026-01-01"]), "savings": [5.0],
+                               "savings_baseline": [1.0]})
+        items = m.action_items(status, [], eh, last12, runway_months=2, min_months=6)
+        self.assertEqual([i["level"] for i in items], ["critical", "warning"])
+
+
 class SampleDataIsConsistent(unittest.TestCase):
     """data_sample/ must be shaped and behave like the real extract."""
 

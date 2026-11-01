@@ -69,6 +69,46 @@ def show(fig: go.Figure) -> None:
     st.plotly_chart(fig, config={"displayModeBar": False})
 
 
+def rgba(hex_color: str, alpha: float) -> str:
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def allocation_chart(status: pd.DataFrame, height: int = 320, legend: bool = True,
+                     compact: bool = False) -> go.Figure:
+    """
+    Range bars: grey band = recommended range, tick = advisor target, dot = actual.
+    `compact` moves the actual % into the axis label so it fits a narrow tile.
+    """
+    rb = status.iloc[::-1].copy()  # Equity on top
+    if compact:
+        rb["asset_class"] = [f"{c}  {p:.1f}%" for c, p in zip(rb["asset_class"], rb["pct"])]
+    color = {label: CLASS_COLOR[cls] for label, cls in zip(rb["asset_class"], status.iloc[::-1]["asset_class"])}
+    fig = go.Figure()
+    has_range = rb["low"].notna()
+    fig.add_bar(y=rb.loc[has_range, "asset_class"], x=rb.loc[has_range, "high"] - rb.loc[has_range, "low"],
+                base=rb.loc[has_range, "low"], orientation="h", name="Recommended range",
+                marker=dict(color=BAND, line_width=0), width=0.5,
+                customdata=rb.loc[has_range, "high"],
+                hovertemplate="%{y}: %{base:.0f}% – %{customdata:.0f}%<extra>Recommended</extra>")
+    fig.add_scatter(y=rb["asset_class"], x=rb["target"], mode="markers", name="Advisor target",
+                    marker=dict(symbol="line-ns", size=22, line=dict(width=2.5, color=MUTED)),
+                    hovertemplate="%{y}: target %{x:.0f}%<extra></extra>")
+    fig.add_scatter(y=rb["asset_class"], x=rb["pct"], mode="markers" if compact else "markers+text",
+                    showlegend=False,
+                    marker=dict(size=12 if compact else 14, color=[color[c] for c in rb["asset_class"]],
+                                line=dict(width=2, color="#fcfcfb" if not DARK else "#1a1a19")),
+                    text=[f"  {p:.1f}%" for p in rb["pct"]], textposition="middle right",
+                    hovertemplate="%{y}: %{x:.2f}%<extra>Actual</extra>")
+    # Legend entry in neutral ink: the dots themselves wear each class's colour
+    fig.add_scatter(x=[None], y=[None], mode="markers", name="Actual",
+                    marker=dict(size=12, color=MUTED))
+    fig.update_xaxes(range=[0, 70], ticksuffix="%", showgrid=True)
+    fig.update_yaxes(categoryorder="array", categoryarray=list(rb["asset_class"]))
+    fig.update_layout(hovermode="closest", barmode="overlay")
+    return style(fig, "", height=height, legend=legend)
+
+
 # ── Data ──────────────────────────────────────────────────────────────────────
 
 if not (DATA / "cashflow.csv").exists():
@@ -94,6 +134,7 @@ alloc = m.class_allocation(d["asset_split"])
 portfolio_total = alloc["value"].sum()
 status = m.balance_status(alloc, m.load_targets(TARGETS),
                           m.latest_targets(d["strategy"]))
+settings = m.load_settings(TARGETS)
 eh = d["expense_heads"]
 
 missing = nw.loc[nw["networth"].isna(), "month"].dt.strftime("%b %Y").tolist()
@@ -118,25 +159,141 @@ tab_sum, tab_nw, tab_cf, tab_sp, tab_rb = st.tabs(
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 
-k = tab_sum.columns(5)
-k[0].metric("Portfolio value", inr(portfolio_total),
-            delta=f"{inr(nw_now - plan_now, signed=True)} vs plan "
-                  f"({nw.dropna(subset=['networth'])['month'].iloc[-1]:%b})", border=True,
-            chart_data=nw["networth"].dropna().tolist(), chart_type="area",
-            help="Current value from the portfolio split. Sparkline: month-end values (missing months skipped).")
-k[1].metric("ROI", f"{roi_now:.2f}%", delta=f"{roi_delta:+.2f} pts" if roi_delta else None,
-            border=True, chart_data=roi["roi_pct"].tail(12).tolist())
-k[2].metric("Savings rate · last 12 mo", f"{t12['savings_rate']:.1f}%",
-            delta=f"{t12['savings_rate'] - prev12['savings_rate']:+.1f} pts vs prior 12 mo", border=True,
-            chart_data=spark["savings_rate"].round(1).tolist())
-k[3].metric("Avg monthly expense · 12 mo", inr(t12["avg_expense"]),
-            delta=f"{100 * (t12['avg_expense'] / prev12['avg_expense'] - 1):+.1f}% vs prior 12 mo",
-            delta_color="inverse", border=True, chart_data=spark["expense"].tolist(), chart_type="bar")
-in_range = (status["status"] == "In range").sum()
-judged = (status["status"] != "No recommendation").sum()
-k[4].metric("Allocation", f"{in_range} of {judged} in range",
-            delta="Balanced" if in_range == judged else "Rebalance needed",
-            delta_color="normal" if in_range == judged else "inverse", delta_arrow="off", border=True)
+last_month = cf_all["month"].max()
+invested = m.invested_assets(d["asset_split"])
+fi_target = settings["fi_target"]
+fi_months = m.months_to_target(invested, t12["savings"] / 12, settings["fi_real_return_pct"], fi_target)
+liquid, runway = m.emergency_runway(d["asset_split"], settings["ef_assets"], t12["avg_expense"])
+ef_min = settings["ef_min_months"]
+
+with tab_sum:
+    # Row 1 · headline numbers
+    k = st.columns(4)
+    k[0].metric("Net worth", inr(portfolio_total),
+                delta=f"{inr(nw_now - plan_now, signed=True)} vs plan "
+                      f"({nw.dropna(subset=['networth'])['month'].iloc[-1]:%b})", border=True,
+                chart_data=nw["networth"].dropna().tolist(), chart_type="area",
+                help="Current value from the portfolio split. Sparkline: month-end values (missing months skipped).")
+
+    with k[1].container(border=True):
+        if np.isnan(fi_target):
+            st.metric("Financial independence", "–")
+            st.caption("Set `target_amount` under [Financial Independence] in targets.ini.")
+        elif fi_months == 0:
+            st.metric("Financial independence", "Reached",
+                      delta=f"{inr(invested)} vs {inr(fi_target)} target", delta_arrow="off")
+            st.progress(1.0)
+        else:
+            eta = (f"Est. {last_month + pd.DateOffset(months=fi_months):%b %Y}" if fi_months
+                   else "Not reachable at current savings")
+            st.metric("Financial independence", f"{100 * invested / fi_target:.0f}%", delta=eta,
+                      delta_color="off", delta_arrow="off",
+                      help=f"Invested assets {inr(invested)} of a {inr(fi_target)} target. The date assumes "
+                           f"you keep saving {inr(t12['savings'] / 12)}/month at a "
+                           f"{settings['fi_real_return_pct']:.0f}% return after inflation.")
+            st.progress(min(invested / fi_target, 1.0))
+        st.caption(f"Target {inr(fi_target)} · {settings['fi_real_return_pct']:.0f}% real return")
+
+    with k[2].container(border=True):
+        ok = runway >= ef_min
+        st.metric("Emergency runway", f"{runway:.1f} mo",
+                  delta=f"{'Above' if ok else 'Below'} {ef_min:.0f}-month minimum",
+                  delta_color="normal" if ok else "inverse", delta_arrow="off",
+                  help=f"{' + '.join(settings['ef_assets'])} = {inr(liquid)}, divided by average "
+                       f"monthly spend of {inr(t12['avg_expense'])}.")
+        st.progress(min(runway / (4 * ef_min), 1.0))
+        st.caption(f"{inr(liquid)} liquid · bar full at {4 * ef_min:.0f} months")
+
+    k[3].metric("Savings rate · last 12 mo", f"{t12['savings_rate']:.1f}%",
+                delta=f"{t12['savings_rate'] - prev12['savings_rate']:+.1f} pts vs prior 12 mo", border=True,
+                chart_data=spark["savings_rate"].round(1).tolist())
+
+    # Row 2 · income flow + things to act on
+    left, right = st.columns(2)
+    with left.container(border=True):
+        flow = m.cash_flow_split(d["breakup"], cf_all, eh)
+        st.markdown(f"**Where the income went · {flow['label']}**")
+        outflows = [("Saved", max(flow["saved"], 0))] + flow["expenses"]
+        out_colors = [SAVINGS] + [EXPENSE] * len(flow["expenses"])
+        out_links = [rgba(SAVINGS, .3)] + [rgba(EXPENSE, .25)] * len(flow["expenses"])
+        # Several income sources feed a central "Income" node; a single source is the hub itself
+        sources = flow["income"] if len(flow["income"]) > 1 else []
+        hub = len(sources)
+        nodes = sources + [("Income", flow["total_income"])] + outflows
+        src = list(range(hub)) + [hub] * len(outflows)
+        dst = [hub] * hub + list(range(hub + 1, hub + 1 + len(outflows)))
+        vals = [v for _, v in sources] + [v for _, v in outflows]
+        node_colors = [INCOME] * hub + [MUTED] + out_colors
+        link_colors = [rgba(INCOME, .25)] * hub + out_links
+        fig = go.Figure(go.Sankey(
+            node=dict(label=[f"{name} · {inr(v)}" for name, v in nodes],
+                      color=node_colors, pad=14, thickness=12, line=dict(width=0)),
+            textfont=dict(size=12, shadow="none"),
+            link=dict(source=src, target=dst, value=vals, color=link_colors,
+                      hovertemplate="%{source.label} → %{target.label}<br>₹%{value:,.0f}<extra></extra>"),
+        ))
+        fig.update_layout(height=360, margin=dict(l=4, r=4, t=4, b=4))
+        show(fig)
+        share = 100 * flow["saved"] / flow["total_income"] if flow["total_income"] else np.nan
+        note = "" if flow["monthly"] else " Monthly detail appears once the latest month's breakup is captured."
+        st.caption(f"Saved {inr(flow['saved'])} ({share:.0f}% of income).{note}")
+
+    with right.container(border=True):
+        st.markdown("**Things to act on**")
+        badge = {"critical": ":red-badge[:material/error: Act now]",
+                 "warning": ":orange-badge[:material/warning: Attention]",
+                 "info": ":blue-badge[:material/info: Note]",
+                 "good": ":green-badge[:material/check: On track]"}
+        for item in m.action_items(status, missing, eh, cf_all.tail(12), runway, ef_min, fmt=inr):
+            st.markdown(f"{badge[item['level']]} **{item['title']}**  \n:gray[{item['detail']}]")
+
+    # Row 3 · detail tiles
+    c = st.columns(4)
+    with c[0].container(border=True):
+        st.markdown("**Spending changes**")
+        mv = m.spending_movers(eh).iloc[::-1]
+        latest_year = int(eh["year"].max())
+        # Values live in the axis labels so they never clip in a narrow tile
+        fig = go.Figure(go.Bar(
+            y=[f"{h}  {inr(v, signed=True)}" for h, v in zip(mv["head"], mv["change"])],
+            x=mv["change"], orientation="h",
+            marker_color=[EXPENSE if v > 0 else INCOME for v in mv["change"]], marker_line_width=0,
+            customdata=[("new" if pd.isna(p) else f"{p:+.0f}%") for p in mv["pct"]],
+            hovertemplate="%{y}/mo · %{customdata} vs last year<extra></extra>"))
+        lim = mv["change"].abs().max() * 1.05
+        fig.update_xaxes(range=[-lim, lim], showticklabels=False, zeroline=True, zerolinecolor=MUTED)
+        show(style(fig, "", height=250, legend=False).update_layout(hovermode="closest"))
+        st.caption(f"Average ₹/month, {latest_year} vs {latest_year - 1}")
+
+    with c[1].container(border=True):
+        st.markdown("**Allocation**")
+        show(allocation_chart(status, height=250, legend=False, compact=True))
+        st.caption("Band: range · tick: target · dot: actual")
+
+    with c[2].container(border=True):
+        st.markdown("**Inflation vs CPI**")
+        ti = m.total_inflation(eh)
+        cpi = settings["cpi_pct"]
+        yrs = ["1-year", "2-year", "3-year"]
+        vals = [ti[f"infl_{n}y"] for n in (1, 2, 3)]
+        fig = go.Figure(go.Bar(
+            y=yrs[::-1], x=vals[::-1], orientation="h",
+            marker_color=[EXPENSE if v > cpi else INCOME for v in vals[::-1]], marker_line_width=0,
+            text=[f"{v:+.1f}%" for v in vals[::-1]], textposition="outside", cliponaxis=False,
+            hovertemplate="%{y}: %{x:.1f}% a year<extra></extra>"))
+        if not np.isnan(cpi):
+            fig.add_vline(x=cpi, line=dict(color=MUTED, dash="dash", width=1.5),
+                          annotation_text=f"CPI {cpi:.1f}%", annotation_position="top",
+                          annotation_font=dict(size=11, color=MUTED))
+        fig.update_xaxes(range=[min(0, min(vals) * 1.3), max(max(vals), cpi if not np.isnan(cpi) else 0) * 1.35],
+                         ticksuffix="%")
+        show(style(fig, "", height=250, legend=False)
+             .update_layout(hovermode="closest", margin=dict(t=28)))
+        st.caption(f"Household spend growth per year. CPI from targets.ini"
+                   + (f" ({settings['cpi_as_of']})" if settings["cpi_as_of"] else "") + ".")
+
+    c[3].metric("ROI", f"{roi_now:.2f}%", delta=f"{roi_delta:+.2f} pts" if roi_delta else None,
+                border=True, chart_data=roi["roi_pct"].tail(12).tolist())
 
 # ── Net worth & portfolio ─────────────────────────────────────────────────────
 
@@ -365,29 +522,7 @@ with tab_sp:
 
 with tab_rb:
     st.subheader("Allocation vs recommended range")
-    rb = status.iloc[::-1]  # Equity on top
-    fig = go.Figure()
-    has_range = rb["low"].notna()
-    fig.add_bar(y=rb.loc[has_range, "asset_class"], x=rb.loc[has_range, "high"] - rb.loc[has_range, "low"],
-                base=rb.loc[has_range, "low"], orientation="h", name="Recommended range",
-                marker=dict(color=BAND, line_width=0), width=0.5,
-                customdata=rb.loc[has_range, "high"],
-                hovertemplate="%{y}: %{base:.0f}% – %{customdata:.0f}%<extra>Recommended</extra>")
-    fig.add_scatter(y=rb["asset_class"], x=rb["target"], mode="markers", name="Advisor target",
-                    marker=dict(symbol="line-ns", size=22, line=dict(width=2.5, color=MUTED)),
-                    hovertemplate="%{y}: target %{x:.0f}%<extra></extra>")
-    fig.add_scatter(y=rb["asset_class"], x=rb["pct"], mode="markers+text", showlegend=False,
-                    marker=dict(size=14, color=[CLASS_COLOR[c] for c in rb["asset_class"]],
-                                line=dict(width=2, color="#fcfcfb" if not DARK else "#1a1a19")),
-                    text=[f"  {p:.1f}%" for p in rb["pct"]], textposition="middle right",
-                    hovertemplate="%{y}: %{x:.2f}%<extra>Actual</extra>")
-    # Legend entry in neutral ink: the dots themselves wear each class's colour
-    fig.add_scatter(x=[None], y=[None], mode="markers", name="Actual",
-                    marker=dict(size=12, color=MUTED))
-    fig.update_xaxes(range=[0, 70], ticksuffix="%", showgrid=True)
-    fig.update_yaxes(categoryorder="array", categoryarray=list(rb["asset_class"]))
-    fig.update_layout(hovermode="closest", barmode="overlay")
-    show(style(fig, "", height=320))
+    show(allocation_chart(status))
 
     cols = st.columns(len(status))
     for col, r in zip(cols, status.itertuples()):

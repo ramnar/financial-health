@@ -38,7 +38,7 @@ streamlit run app.py
 | `capture_rr2ff.py` | Saves each RR2FF analytics page (HTML + screenshot) after a manual login |
 | `extract.py` | Pulls the chart data and tables out of the saved pages into tidy CSVs |
 | `make_sample_data.py` | Writes synthetic data into `data_sample/` (with its own `targets.ini`) |
-| `targets.ini` | Recommended allocation ranges (the balance-status page loads these in iframes, so they're kept by hand) |
+| `targets.ini` | Hand-kept settings: allocation ranges per asset class (RR2FF loads these in iframes), official CPI, the financial-independence target and expected return, and which assets count as the emergency fund |
 | `metrics.py` | All calculations: missing-month handling, trends, inflation, rebalancing |
 | `app.py` | The dashboard |
 | `test_metrics.py` | `python -m unittest test_metrics` — includes checks that the extracted data reproduces RR2FF's own figures |
