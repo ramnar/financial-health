@@ -1,0 +1,4 @@
+# Personal financial data — never commit
+raw/
+data/
+__pycache__/

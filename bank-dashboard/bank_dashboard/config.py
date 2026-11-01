@@ -8,6 +8,17 @@ from pathlib import Path
 
 
 @dataclass
+class BankConfig:
+    key: str                  # matches [bank.<key>] in config.ini
+    name: str                 # display name (e.g. "ICICI")
+    pdf_password: str
+    senders: list[str]        # FROM filter values (partial matches allowed)
+    subject: str | None       # SUBJECT filter, or None to skip
+    folders: list[str]        # Gmail IMAP folders to search
+    parser: str               # key into parsers.registry.PARSERS
+
+
+@dataclass
 class Config:
     gmail_address: str
     gmail_app_password: str
@@ -15,19 +26,16 @@ class Config:
     year: int
     date_start: date
     date_end: date
-    icici_pdf_password: str
-    equitas_pdf_password: str
+    banks: list[BankConfig]
     statements_dir: Path
     decrypted_dir: Path
     cache_file: Path
 
 
 def _parse_month(s: str) -> int:
-    """Accept month number (3) or name (March / mar)."""
     s = s.strip()
     if s.isdigit():
         return int(s)
-    import calendar
     s_lower = s.lower()
     for i, name in enumerate(calendar.month_name):
         if name.lower().startswith(s_lower[:3]):
@@ -48,19 +56,40 @@ def get_date_range(month: int, year: int) -> tuple[date, date]:
     return start, end
 
 
+def _parse_list(value: str) -> list[str]:
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
+def _load_banks(ini: configparser.ConfigParser) -> list[BankConfig]:
+    banks = []
+    for section in ini.sections():
+        if not section.startswith("bank."):
+            continue
+        key = section[len("bank."):]
+        banks.append(BankConfig(
+            key=key,
+            name=ini.get(section, "name", fallback=key),
+            pdf_password=ini.get(section, "pdf_password", fallback=""),
+            senders=_parse_list(ini.get(section, "senders", fallback="")),
+            subject=ini.get(section, "subject", fallback="") or None,
+            folders=_parse_list(ini.get(section, "folders", fallback="INBOX")),
+            parser=ini.get(section, "parser", fallback=key),
+        ))
+    return banks
+
+
 def load(args: argparse.Namespace | None = None, config_path: str = "config.ini") -> Config:
     ini = configparser.ConfigParser()
     ini.read(config_path)
 
-    def _get(section, key, env_var=None, fallback=None):
+    def _get(section, key, env_var=None, fallback=""):
         if env_var and os.environ.get(env_var):
             return os.environ[env_var]
-        return ini.get(section, key, fallback=fallback or "")
+        return ini.get(section, key, fallback=fallback)
 
     gmail_address = _get("gmail", "gmail_address", "GMAIL_ADDRESS")
     gmail_app_password = _get("gmail", "gmail_app_password", "GMAIL_APP_PASSWORD")
 
-    # Month/year: CLI args > env vars > config.ini > default (previous month)
     month_str = None
     year_str = None
     if args and getattr(args, "month", None):
@@ -88,6 +117,8 @@ def load(args: argparse.Namespace | None = None, config_path: str = "config.ini"
         p = Path(raw)
         return p if p.is_absolute() else base / p
 
+    banks = _load_banks(ini)
+
     return Config(
         gmail_address=gmail_address,
         gmail_app_password=gmail_app_password,
@@ -95,8 +126,7 @@ def load(args: argparse.Namespace | None = None, config_path: str = "config.ini"
         year=year,
         date_start=date_start,
         date_end=date_end,
-        icici_pdf_password=_get("passwords", "icici_pdf_password", "ICICI_PDF_PASSWORD"),
-        equitas_pdf_password=_get("passwords", "equitas_pdf_password", "EQUITAS_PDF_PASSWORD"),
+        banks=banks,
         statements_dir=_path("paths", "statements_dir", "./data/statements"),
         decrypted_dir=_path("paths", "decrypted_dir", "./data/decrypted"),
         cache_file=_path("paths", "cache_file", "./data/transactions_cache.json"),

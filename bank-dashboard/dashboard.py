@@ -66,10 +66,19 @@ sel_year, sel_month = selected
 bank_options = sorted({t.bank for t in transactions})
 selected_banks = st.sidebar.multiselect("Banks", options=bank_options, default=bank_options)
 
+selected_types = st.sidebar.multiselect(
+    "Transaction Type",
+    options=["credit", "debit"],
+    default=["debit"],
+)
+
 # ── Filter ─────────────────────────────────────────────────────────────────────
 filtered = [
     t for t in transactions
-    if t.date.year == sel_year and t.date.month == sel_month and t.bank in selected_banks
+    if t.date.year == sel_year
+    and t.date.month == sel_month
+    and t.bank in selected_banks
+    and t.type in selected_types
 ]
 summary = compute_cashflow(filtered, sel_month, sel_year)
 

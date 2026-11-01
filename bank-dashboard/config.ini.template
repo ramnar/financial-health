@@ -7,11 +7,35 @@ gmail_app_password = xxxx xxxx xxxx xxxx
 month =
 year  =
 
-[passwords]
-icici_pdf_password   = <first4ofname><DDMM-of-DOB>
-equitas_pdf_password = <DDMM-of-DOB><FIRST3OFNAME>
-
 [paths]
 statements_dir = ./data/statements
 decrypted_dir  = ./data/decrypted
 cache_file     = ./data/transactions_cache.json
+
+# ── Bank definitions ──────────────────────────────────────────────────────────
+# Add one [bank.<key>] section per bank. The key must match a parser registered
+# in bank_dashboard/parsers/registry.py.
+#
+# Fields:
+#   name         - display name shown in the dashboard
+#   pdf_password - password to decrypt the e-Statement PDF (leave blank if none)
+#   senders      - comma-separated FROM filter values (partial match is fine)
+#   subject      - SUBJECT keyword filter (leave blank to skip subject filter)
+#   folders      - comma-separated Gmail IMAP folders/labels to search
+#   parser       - key into parsers/registry.py PARSERS dict
+
+[bank.icici]
+name         = ICICI
+pdf_password = <first4ofname><DDMM-of-DOB>
+senders      = estatement@icicibank.com, estatement@icici.bank.in
+subject      = ICICI Bank Statement
+folders      = INBOX, 1money/bank_icici
+parser       = icici
+
+[bank.equitas]
+name         = Equitas
+pdf_password = <DDMM-of-DOB><FIRST3OFNAME>
+senders      = equitas
+subject      =
+folders      = INBOX, 1money/bank_equitas
+parser       = equitas

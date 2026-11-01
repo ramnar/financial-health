@@ -4,7 +4,7 @@ Cashflow Pipeline — fetch → parse → consolidate → cache → launch dashb
 
 Usage:
     python run.py                        # defaults to previous calendar month
-    python run.py --month 3 --year 2025  # specific month
+    python run.py --month 3 --year 2026  # specific month
     python run.py --no-dashboard         # fetch and parse only, skip launching Streamlit
     python run.py --config /path/to/config.ini
 """
@@ -15,15 +15,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Allow running from project root without installing the package
 sys.path.insert(0, str(Path(__file__).parent))
 
 from bank_dashboard import config as cfg_module
 from bank_dashboard import categorizer, consolidator
 from bank_dashboard.fetchers import gmail_fetcher, pdf_fetcher
 from bank_dashboard.models import save_transactions
-from bank_dashboard.parsers.equitas_pdf_parser import EquitasPdfParser
-from bank_dashboard.parsers.icici_pdf_parser import IciciPdfParser
+from bank_dashboard.parsers.registry import PARSERS
 
 
 def main():
@@ -44,13 +42,19 @@ def main():
     config_path = Path(args.config)
     if not config_path.exists():
         print(f"ERROR: Config file not found: {config_path}")
-        print(f"  Copy config.ini.template to config.ini and fill in your credentials.")
+        print("  Copy config.ini.template to config.ini and fill in your credentials.")
         sys.exit(1)
 
     conf = cfg_module.load(args, str(config_path))
     month_name = calendar.month_name[conf.month]
     print(f"\n=== Cashflow Pipeline — {month_name} {conf.year} ===")
-    print(f"  Date range: {conf.date_start} → {conf.date_end}\n")
+    print(f"  Date range: {conf.date_start} → {conf.date_end}")
+
+    if not conf.banks:
+        print("\nERROR: No banks configured. Add [bank.<name>] sections to config.ini.")
+        sys.exit(1)
+
+    print(f"  Banks: {', '.join(b.name for b in conf.banks)}\n")
 
     # ── Connect to Gmail ──────────────────────────────────────────────────────
     print("Connecting to Gmail via IMAP...")
@@ -63,50 +67,38 @@ def main():
 
     all_transactions = []
 
-    # ── ICICI: fetch PDF statement ────────────────────────────────────────────
-    print("\nFetching ICICI e-Statement PDF...")
-    try:
-        icici_pdfs = gmail_fetcher.fetch_icici_statement_pdfs(
-            mail, conf.date_start, conf.date_end, conf.statements_dir
-        )
-        for pdf_path in icici_pdfs:
-            print(f"  Decrypting {pdf_path.name}...")
-            decrypted = conf.decrypted_dir / f"icici_decrypted_{pdf_path.name}"
-            try:
-                decrypted_path = pdf_fetcher.decrypt_pdf(pdf_path, conf.icici_pdf_password, decrypted)
-                icici_pdf_parser = IciciPdfParser(conf.date_start, conf.date_end)
-                pdf_txns = icici_pdf_parser.parse(decrypted_path)
-                print(f"  Parsed {len(pdf_txns)} transactions from ICICI PDF")
-                all_transactions.extend(pdf_txns)
-            except Exception as e:
-                print(f"  WARNING: ICICI PDF parse failed ({pdf_path.name}): {e}")
-    except Exception as e:
-        print(f"  WARNING: ICICI PDF fetch failed: {e}")
+    # ── Fetch, decrypt, and parse each configured bank ────────────────────────
+    for bank in conf.banks:
+        print(f"\nFetching {bank.name} e-Statement PDF...")
 
-    # ── Equitas: fetch PDF statement ──────────────────────────────────────────
-    print("\nFetching Equitas e-Statement PDF...")
-    try:
-        equitas_pdfs = gmail_fetcher.fetch_equitas_statement_pdfs(
-            mail, conf.date_start, conf.date_end, conf.statements_dir
-        )
-        for pdf_path in equitas_pdfs:
+        parser_class = PARSERS.get(bank.parser)
+        if parser_class is None:
+            print(f"  WARNING: No parser registered for key {bank.parser!r}. Skipping.")
+            continue
+
+        try:
+            pdfs = gmail_fetcher.fetch_bank_statement_pdfs(
+                mail, bank, conf.date_start, conf.date_end, conf.statements_dir
+            )
+        except Exception as e:
+            print(f"  WARNING: Gmail fetch failed for {bank.name}: {e}")
+            continue
+
+        for pdf_path in pdfs:
             print(f"  Decrypting {pdf_path.name}...")
-            decrypted = conf.decrypted_dir / f"equitas_decrypted_{pdf_path.name}"
+            decrypted = conf.decrypted_dir / f"{bank.key}_decrypted_{pdf_path.name}"
             try:
-                decrypted_path = pdf_fetcher.decrypt_pdf(pdf_path, conf.equitas_pdf_password, decrypted)
-                equitas_parser = EquitasPdfParser(conf.date_start, conf.date_end)
-                pdf_txns = equitas_parser.parse(decrypted_path)
-                print(f"  Parsed {len(pdf_txns)} transactions from Equitas PDF")
-                all_transactions.extend(pdf_txns)
+                decrypted_path = pdf_fetcher.decrypt_pdf(pdf_path, bank.pdf_password, decrypted)
+                txns = parser_class(conf.date_start, conf.date_end).parse(decrypted_path)
+                print(f"  Parsed {len(txns)} transactions from {bank.name} PDF")
+                all_transactions.extend(txns)
             except Exception as e:
-                print(f"  WARNING: Equitas PDF parse failed ({pdf_path.name}): {e}")
-    except Exception as e:
-        print(f"  WARNING: Equitas PDF fetch failed: {e}")
+                print(f"  WARNING: {bank.name} PDF parse failed ({pdf_path.name}): {e}")
 
     mail.logout()
 
     if not all_transactions:
-        print("\nNo transactions found. Check your Gmail credentials, date range, and email filters.")
+        print("\nNo transactions found. Check your config.ini and Gmail credentials.")
         sys.exit(0)
 
     # ── Consolidate & categorize ──────────────────────────────────────────────
@@ -116,7 +108,7 @@ def main():
         t.category = categorizer.categorize(t.description, t.type)
     print(f"  Total transactions after deduplication: {len(transactions)}")
 
-    # ── Compute and print cashflow summary ────────────────────────────────────
+    # ── Cashflow summary ──────────────────────────────────────────────────────
     summary = consolidator.compute_cashflow(transactions, conf.month, conf.year)
     print(f"\n{'='*50}")
     print(f"  Cashflow Summary — {month_name} {conf.year}")

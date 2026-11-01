@@ -4,6 +4,8 @@ import imaplib
 from datetime import date
 from pathlib import Path
 
+from bank_dashboard.config import BankConfig
+
 _IMAP_HOST = "imap.gmail.com"
 _IMAP_PORT = 993
 
@@ -15,7 +17,6 @@ def connect(gmail_address: str, app_password: str) -> imaplib.IMAP4_SSL:
 
 
 def _imap_date(d: date) -> str:
-    """Format date as DD-Mon-YYYY for IMAP SINCE/BEFORE criteria."""
     return d.strftime("%d-%b-%Y")
 
 
@@ -57,21 +58,16 @@ def _search_multi(
 
 
 def extract_text_body(msg: email.message.Message) -> str:
-    """Return decoded text/plain body. Falls back to stripping HTML if needed."""
     for part in msg.walk():
         if part.get_content_type() == "text/plain":
             payload = part.get_payload(decode=True)
             charset = part.get_content_charset() or "utf-8"
             return payload.decode(charset, errors="replace")
-
-    # Fallback: strip HTML tags
     for part in msg.walk():
         if part.get_content_type() == "text/html":
             payload = part.get_payload(decode=True)
             charset = part.get_content_charset() or "utf-8"
-            html = payload.decode(charset, errors="replace")
-            return _strip_html(html)
-
+            return _strip_html(payload.decode(charset, errors="replace"))
     return ""
 
 
@@ -94,7 +90,6 @@ def _strip_html(html: str) -> str:
 def extract_pdf_attachments(
     msg: email.message.Message, output_dir: Path
 ) -> list[Path]:
-    """Save all PDF attachments from a message to output_dir."""
     output_dir.mkdir(parents=True, exist_ok=True)
     saved = []
     counter = 0
@@ -106,9 +101,7 @@ def extract_pdf_attachments(
                 filename = f"attachment_{counter}.pdf"
             counter += 1
             path = output_dir / filename
-            # Avoid overwriting an existing file with the same name
-            stem = path.stem
-            suffix = path.suffix
+            stem, suffix = path.stem, path.suffix
             dup = 1
             while path.exists():
                 path = output_dir / f"{stem}_{dup}{suffix}"
@@ -124,14 +117,12 @@ def build_imap_query(
     date_start: date,
     date_end: date,
 ) -> str:
-    """Build an IMAP search query string."""
     from datetime import timedelta
     parts = []
     if sender:
         parts.append(f'FROM "{sender}"')
     if subject_keyword:
         parts.append(f'SUBJECT "{subject_keyword}"')
-    # IMAP SINCE is inclusive; BEFORE is exclusive — use day after date_end
     parts.append(f'SINCE "{_imap_date(date_start)}"')
     parts.append(f'BEFORE "{_imap_date(date_end + timedelta(days=1))}"')
     return " ".join(parts)
@@ -144,63 +135,40 @@ def _statement_window(date_start: date, date_end: date) -> tuple[date, date]:
     """
     from datetime import timedelta
     import calendar as _cal
-    win_start = date_end + timedelta(days=1)                          # April 1
+    win_start = date_end + timedelta(days=1)
     last_day = _cal.monthrange(win_start.year, win_start.month)[1]
-    win_end = win_start.replace(day=last_day)                        # April 30
+    win_end = win_start.replace(day=last_day)
     return win_start, win_end
 
 
-def fetch_icici_alert_bodies(
-    mail: imaplib.IMAP4_SSL, date_start: date, date_end: date
-) -> list[str]:
-    query = build_imap_query("customercare@icicibank.com", "Transaction alert", date_start, date_end)
-    print(f"  [Gmail] ICICI alerts query: {query}")
-    messages = search_emails(mail, query)
-    print(f"  [Gmail] Found {len(messages)} ICICI alert emails")
-    return [extract_text_body(m) for m in messages]
-
-
-_ICICI_SENDERS = ["estatement@icicibank.com", "estatement@icici.bank.in"]
-_ICICI_FOLDERS = ["INBOX", "1money/bank_icici"]
-
-
-def fetch_icici_statement_pdfs(
-    mail: imaplib.IMAP4_SSL, date_start: date, date_end: date, output_dir: Path
+def fetch_bank_statement_pdfs(
+    mail: imaplib.IMAP4_SSL,
+    bank: BankConfig,
+    date_start: date,
+    date_end: date,
+    output_dir: Path,
 ) -> list[Path]:
+    """Generic fetcher: searches all configured sender × folder combinations."""
     win_start, win_end = _statement_window(date_start, date_end)
-    combos = []
-    for sender in _ICICI_SENDERS:
-        query = build_imap_query(sender, "ICICI Bank Statement", win_start, win_end)
-        for folder in _ICICI_FOLDERS:
-            print(f"  [Gmail] ICICI query folder={folder!r}: {query}")
+
+    combos: list[tuple[str, str]] = []
+    for sender in (bank.senders or [None]):
+        query = build_imap_query(sender, bank.subject, win_start, win_end)
+        for folder in bank.folders:
+            print(f"  [Gmail] {bank.name} query folder={folder!r}: {query}")
             combos.append((query, folder))
+
     messages = _search_multi(mail, combos)
-    print(f"  [Gmail] Found {len(messages)} ICICI statement emails (deduplicated)")
-    pdfs = []
-    for msg in messages:
-        pdfs.extend(extract_pdf_attachments(msg, output_dir))
-    return pdfs
 
-
-_EQUITAS_FOLDERS = ["INBOX", "1money/bank_equitas"]
-
-
-def fetch_equitas_statement_pdfs(
-    mail: imaplib.IMAP4_SSL, date_start: date, date_end: date, output_dir: Path
-) -> list[Path]:
-    win_start, win_end = _statement_window(date_start, date_end)
-    query = build_imap_query("equitas", None, win_start, win_end)
-    combos = [(query, folder) for folder in _EQUITAS_FOLDERS]
-    for folder in _EQUITAS_FOLDERS:
-        print(f"  [Gmail] Equitas query folder={folder!r}: {query}")
-    messages = _search_multi(mail, combos)
+    # Fallback: search by date only in the first non-INBOX folder (dedicated label)
     if not messages:
-        print("  [Gmail] Retrying Equitas with subject keyword across folders...")
-        query_subj = build_imap_query(None, "Statement", win_start, win_end)
-        fallback_combos = [(query_subj, folder) for folder in _EQUITAS_FOLDERS]
-        candidates = _search_multi(mail, fallback_combos)
-        messages = [m for m in candidates if "equitas" in (m.get("From") or "").lower()]
-    print(f"  [Gmail] Found {len(messages)} Equitas statement emails (deduplicated)")
+        label_folders = [f for f in bank.folders if f != "INBOX"]
+        if label_folders:
+            query_date = build_imap_query(None, None, win_start, win_end)
+            print(f"  [Gmail] {bank.name} fallback by date in {label_folders[0]!r}: {query_date}")
+            messages = search_emails(mail, query_date, label_folders[0])
+
+    print(f"  [Gmail] Found {len(messages)} {bank.name} statement email(s)")
     pdfs = []
     for msg in messages:
         pdfs.extend(extract_pdf_attachments(msg, output_dir))
