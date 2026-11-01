@@ -1,8 +1,9 @@
 """
 Portfolio & cash-flow analytics dashboard.
 
-    streamlit run app.py                         # synthetic data in data_sample/
-    ANALYTICS_DATA=data streamlit run app.py     # real data (after extract.py)
+    streamlit run app.py     # data/ if extracted, otherwise the synthetic data_sample/
+
+Set ANALYTICS_DATA=<folder> to force a specific data folder.
 """
 import os
 from datetime import datetime
@@ -16,7 +17,8 @@ import streamlit as st
 import metrics as m
 
 ROOT = Path(__file__).parent
-DATA = ROOT / os.environ.get("ANALYTICS_DATA", "data_sample")
+DEFAULT_DATA = "data" if (ROOT / "data" / "cashflow.csv").exists() else "data_sample"
+DATA = ROOT / os.environ.get("ANALYTICS_DATA", DEFAULT_DATA)
 IS_SAMPLE = DATA.name == "data_sample"
 # Each data set may carry its own ranges; real data falls back to the shared file
 TARGETS = DATA / "targets.ini" if (DATA / "targets.ini").exists() else ROOT / "targets.ini"
@@ -100,9 +102,6 @@ captured = datetime.fromtimestamp((DATA / "cashflow.csv").stat().st_mtime)
 # ── Header ────────────────────────────────────────────────────────────────────
 
 st.title("Portfolio Analytics")
-if IS_SAMPLE:
-    st.warning("Showing **synthetic sample data**. To view your real data, run "
-               "`ANALYTICS_DATA=data streamlit run app.py`.", icon=":material/science:")
 source = "Synthetic sample data, generated" if IS_SAMPLE else "Source: RR2FF, extracted"
 st.caption(f"{source} {captured:%d %b %Y}. "
            f"Cash flow through {cf_all['month'].max():%b %Y} (current month excluded as incomplete).")
@@ -114,7 +113,12 @@ t12 = m.trailing_summary(cf_all)
 prev12 = m.trailing_summary(cf_all.iloc[:-12])
 spark = cf_all.tail(12)
 
-k = st.columns(5)
+tab_sum, tab_nw, tab_cf, tab_sp, tab_rb = st.tabs(
+    ["Summary", "Net worth & portfolio", "Cash flow", "Spending", "Rebalancing"])
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+
+k = tab_sum.columns(5)
 k[0].metric("Portfolio value", inr(portfolio_total),
             delta=f"{inr(nw_now - plan_now, signed=True)} vs plan "
                   f"({nw.dropna(subset=['networth'])['month'].iloc[-1]:%b})", border=True,
@@ -133,8 +137,6 @@ judged = (status["status"] != "No recommendation").sum()
 k[4].metric("Allocation", f"{in_range} of {judged} in range",
             delta="Balanced" if in_range == judged else "Rebalance needed",
             delta_color="normal" if in_range == judged else "inverse", delta_arrow="off", border=True)
-
-tab_nw, tab_cf, tab_sp, tab_rb = st.tabs(["Net worth & portfolio", "Cash flow", "Spending", "Rebalancing"])
 
 # ── Net worth & portfolio ─────────────────────────────────────────────────────
 
