@@ -1,9 +1,10 @@
 """
 Portfolio & cash-flow analytics dashboard.
 
-    python extract.py          # once, after capturing pages into raw/
-    streamlit run app.py
+    streamlit run app.py                         # synthetic data in data_sample/
+    ANALYTICS_DATA=data streamlit run app.py     # real data (after extract.py)
 """
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -15,7 +16,10 @@ import streamlit as st
 import metrics as m
 
 ROOT = Path(__file__).parent
-DATA = ROOT / "data"
+DATA = ROOT / os.environ.get("ANALYTICS_DATA", "data_sample")
+IS_SAMPLE = DATA.name == "data_sample"
+# Each data set may carry its own ranges; real data falls back to the shared file
+TARGETS = DATA / "targets.ini" if (DATA / "targets.ini").exists() else ROOT / "targets.ini"
 
 st.set_page_config(page_title="Portfolio Analytics", page_icon="₹", layout="wide")
 
@@ -67,17 +71,17 @@ def show(fig: go.Figure) -> None:
 
 if not (DATA / "cashflow.csv").exists():
     st.title("Portfolio Analytics")
-    st.info("No data yet. Capture and extract RR2FF pages first:\n\n"
-            "```\npython capture_rr2ff.py\npython extract.py\n```")
+    st.info(f"No data in `{DATA.name}/`. Generate sample data or extract your real data:\n\n"
+            "```\npython make_sample_data.py\n# or\npython capture_rr2ff.py && python extract.py\n```")
     st.stop()
 
 
 @st.cache_data
-def load(mtime: float) -> dict[str, pd.DataFrame]:
-    return m.load_data(DATA)
+def load(data_dir: Path, mtime: float) -> dict[str, pd.DataFrame]:
+    return m.load_data(data_dir)
 
 
-d = load((DATA / "cashflow.csv").stat().st_mtime)
+d = load(DATA, (DATA / "cashflow.csv").stat().st_mtime)
 today = pd.Timestamp(datetime.now())
 
 nw = m.mark_missing(d["networth"], ["assets", "networth"])
@@ -86,7 +90,7 @@ roi = d["roi"].dropna()
 cf_all = m.complete_months(d["cashflow"], today)
 alloc = m.class_allocation(d["asset_split"])
 portfolio_total = alloc["value"].sum()
-status = m.balance_status(alloc, m.load_targets(ROOT / "targets.ini"),
+status = m.balance_status(alloc, m.load_targets(TARGETS),
                           m.latest_targets(d["strategy"]))
 eh = d["expense_heads"]
 
@@ -96,7 +100,11 @@ captured = datetime.fromtimestamp((DATA / "cashflow.csv").stat().st_mtime)
 # ── Header ────────────────────────────────────────────────────────────────────
 
 st.title("Portfolio Analytics")
-st.caption(f"Source: RR2FF, extracted {captured:%d %b %Y}. "
+if IS_SAMPLE:
+    st.warning("Showing **synthetic sample data**. To view your real data, run "
+               "`ANALYTICS_DATA=data streamlit run app.py`.", icon=":material/science:")
+source = "Synthetic sample data, generated" if IS_SAMPLE else "Source: RR2FF, extracted"
+st.caption(f"{source} {captured:%d %b %Y}. "
            f"Cash flow through {cf_all['month'].max():%b %Y} (current month excluded as incomplete).")
 
 nw_now, nw_delta = m.latest_change(nw["networth"])

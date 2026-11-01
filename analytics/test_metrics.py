@@ -57,6 +57,35 @@ class PureLogic(unittest.TestCase):
         self.assertEqual(out.loc["Real Estate", "status"], "No recommendation")
 
 
+class SampleDataIsConsistent(unittest.TestCase):
+    """data_sample/ must be shaped and behave like the real extract."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.d = m.load_data(ROOT / "data_sample")
+
+    def test_same_files_as_real_extract(self):
+        expected = {"networth", "equity_pct", "roi", "asset_split", "strategy",
+                    "cashflow", "breakup", "expense_heads"}
+        self.assertEqual(set(self.d), expected)
+
+    def test_assets_roll_up_to_classes(self):
+        tree = m.asset_tree(self.d["asset_split"]).groupby("asset_class")["value"].sum()
+        alloc = m.class_allocation(self.d["asset_split"]).set_index("asset_class")["value"]
+        for cls in tree.index:
+            self.assertEqual(tree[cls], alloc[cls], cls)
+
+    def test_head_totals_match_cashflow(self):
+        eh, cf = self.d["expense_heads"], self.d["cashflow"]
+        year = eh["year"].max() - 1
+        self.assertEqual(eh[eh["year"] == year]["annual"].sum(),
+                         cf[cf["month"].dt.year == year]["expense"].sum())
+
+    def test_strategy_revisions_sum_to_100(self):
+        totals = self.d["strategy"].filter(like="|Total").sum(axis=1)
+        self.assertTrue((totals == 100).all())
+
+
 @unittest.skipUnless((ROOT / "data" / "cashflow.csv").exists(), "run extract.py first")
 class MatchesRR2FF(unittest.TestCase):
     """The extracted data must reproduce figures shown on the RR2FF pages."""

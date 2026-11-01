@@ -1,0 +1,16 @@
+level,name,value
+asset,Stocks,3150000.0
+asset,MutualFunds,3480000.0
+asset,Retirement,2600000.0
+asset,Mutual Fund Debt,1250000.0
+asset,PPF,420000.0
+asset,ExpenseFund,150000.0
+asset,Gold,520000.0
+asset,Cryptocurrency,60000.0
+asset,HouseRentAdvance,75000.0
+asset_class,Real Estate,0.0
+asset_class,Equity Based Investments,6630000.0
+asset_class,Debt Based Investments,4420000.0
+asset_class,Commodities,520000.0
+asset_class,Cryptocurrencies,60000.0
+asset_class,All Others,75000.0

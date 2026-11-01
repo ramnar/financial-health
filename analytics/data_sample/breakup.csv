@@ -1,0 +1,207 @@
+month,category,head,amount
+2025-11-01,Income,Salary,249315
+2025-11-01,Income,Bonus Provision,31963
+2025-11-01,Income,Provident Fund,22374
+2025-11-01,Income,NPS,12785
+2025-11-01,Income,Interest Income,3196
+2025-12-01,Income,Salary,253191
+2025-12-01,Income,Bonus Provision,32460
+2025-12-01,Income,Provident Fund,22722
+2025-12-01,Income,NPS,12984
+2025-12-01,Income,Interest Income,3246
+2026-01-01,Income,Salary,249597
+2026-01-01,Income,Bonus Provision,32000
+2026-01-01,Income,Provident Fund,22400
+2026-01-01,Income,NPS,12800
+2026-01-01,Income,Interest Income,3200
+2026-02-01,Income,Salary,247504
+2026-02-01,Income,Bonus Provision,31731
+2026-02-01,Income,Provident Fund,22212
+2026-02-01,Income,NPS,12693
+2026-02-01,Income,Interest Income,3173
+2026-03-01,Income,Salary,247179
+2026-03-01,Income,Bonus Provision,31690
+2026-03-01,Income,Provident Fund,22183
+2026-03-01,Income,NPS,12676
+2026-03-01,Income,Interest Income,3169
+2026-04-01,Income,Salary,247419
+2026-04-01,Income,Bonus Provision,31720
+2026-04-01,Income,Provident Fund,22204
+2026-04-01,Income,NPS,12688
+2026-04-01,Income,Interest Income,3172
+2026-05-01,Income,Salary,247808
+2026-05-01,Income,Bonus Provision,31770
+2026-05-01,Income,Provident Fund,22239
+2026-05-01,Income,NPS,12708
+2026-05-01,Income,Interest Income,3177
+2026-06-01,Income,Salary,247500
+2026-06-01,Income,Bonus Provision,31731
+2026-06-01,Income,Provident Fund,22212
+2026-06-01,Income,NPS,12692
+2026-06-01,Income,Interest Income,3173
+2026-07-01,Income,Salary,268265
+2026-07-01,Income,Bonus Provision,34393
+2026-07-01,Income,Provident Fund,24075
+2026-07-01,Income,NPS,13757
+2026-07-01,Income,Interest Income,3439
+2026-08-01,Income,Salary,261222
+2026-08-01,Income,Bonus Provision,33490
+2026-08-01,Income,Provident Fund,23443
+2026-08-01,Income,NPS,13396
+2026-08-01,Income,Interest Income,3349
+2026-09-01,Income,Salary,268121
+2026-09-01,Income,Bonus Provision,34374
+2026-09-01,Income,Provident Fund,24062
+2026-09-01,Income,NPS,13750
+2026-09-01,Income,Interest Income,3437
+2026-10-01,Income,Salary,264820
+2026-10-01,Income,Bonus Provision,33951
+2026-10-01,Income,Provident Fund,23766
+2026-10-01,Income,NPS,13581
+2026-10-01,Income,Interest Income,3395
+2025-11-01,Expense,Rent,25891
+2025-12-01,Expense,Rent,25994
+2026-01-01,Expense,Rent,26102
+2026-02-01,Expense,Rent,26211
+2026-03-01,Expense,Rent,26309
+2026-04-01,Expense,Rent,26418
+2026-05-01,Expense,Rent,26524
+2026-06-01,Expense,Rent,26634
+2026-07-01,Expense,Rent,26741
+2026-08-01,Expense,Rent,26852
+2026-09-01,Expense,Rent,26964
+2026-10-01,Expense,Rent,27072
+2025-11-01,Expense,SchoolFees,20354
+2025-12-01,Expense,SchoolFees,18887
+2026-01-01,Expense,SchoolFees,19319
+2026-02-01,Expense,SchoolFees,19637
+2026-03-01,Expense,SchoolFees,20153
+2026-04-01,Expense,SchoolFees,21844
+2026-05-01,Expense,SchoolFees,20638
+2026-06-01,Expense,SchoolFees,63412
+2026-07-01,Expense,SchoolFees,23460
+2026-08-01,Expense,SchoolFees,21846
+2026-09-01,Expense,SchoolFees,23285
+2026-10-01,Expense,SchoolFees,21609
+2025-11-01,Expense,Groceries,9986
+2025-12-01,Expense,Groceries,10848
+2026-01-01,Expense,Groceries,12959
+2026-02-01,Expense,Groceries,11529
+2026-03-01,Expense,Groceries,11076
+2026-04-01,Expense,Groceries,9661
+2026-05-01,Expense,Groceries,8632
+2026-06-01,Expense,Groceries,10774
+2026-07-01,Expense,Groceries,11618
+2026-08-01,Expense,Groceries,14939
+2026-09-01,Expense,Groceries,12136
+2026-10-01,Expense,Groceries,13766
+2025-11-01,Expense,Utilities,2937
+2025-12-01,Expense,Utilities,3257
+2026-01-01,Expense,Utilities,3930
+2026-02-01,Expense,Utilities,3137
+2026-03-01,Expense,Utilities,3494
+2026-04-01,Expense,Utilities,1835
+2026-05-01,Expense,Utilities,3095
+2026-06-01,Expense,Utilities,2611
+2026-07-01,Expense,Utilities,2387
+2026-08-01,Expense,Utilities,2615
+2026-09-01,Expense,Utilities,2975
+2026-10-01,Expense,Utilities,3790
+2025-11-01,Expense,PhoneInternet,1880
+2025-12-01,Expense,PhoneInternet,1447
+2026-01-01,Expense,PhoneInternet,1568
+2026-02-01,Expense,PhoneInternet,1736
+2026-03-01,Expense,PhoneInternet,1683
+2026-04-01,Expense,PhoneInternet,1555
+2026-05-01,Expense,PhoneInternet,1597
+2026-06-01,Expense,PhoneInternet,1398
+2026-07-01,Expense,PhoneInternet,1585
+2026-08-01,Expense,PhoneInternet,1583
+2026-09-01,Expense,PhoneInternet,1667
+2026-10-01,Expense,PhoneInternet,1541
+2025-11-01,Expense,DiningOut,3724
+2025-12-01,Expense,DiningOut,3926
+2026-02-01,Expense,DiningOut,4269
+2026-03-01,Expense,DiningOut,5761
+2026-04-01,Expense,DiningOut,4749
+2026-05-01,Expense,DiningOut,4724
+2026-06-01,Expense,DiningOut,3773
+2026-07-01,Expense,DiningOut,3861
+2026-08-01,Expense,DiningOut,3171
+2026-09-01,Expense,DiningOut,4107
+2026-10-01,Expense,DiningOut,1632
+2025-11-01,Expense,Travel,3802
+2025-12-01,Expense,Travel,10864
+2026-06-01,Expense,Travel,7553
+2025-11-01,Expense,Medical,2888
+2025-12-01,Expense,Medical,2387
+2026-01-01,Expense,Medical,2254
+2026-02-01,Expense,Medical,1647
+2026-03-01,Expense,Medical,577
+2026-06-01,Expense,Medical,1700
+2026-09-01,Expense,Medical,1574
+2026-10-01,Expense,Medical,2757
+2025-11-01,Expense,HealthInsurance,2844
+2025-12-01,Expense,HealthInsurance,2862
+2026-01-01,Expense,HealthInsurance,2881
+2026-02-01,Expense,HealthInsurance,2900
+2026-03-01,Expense,HealthInsurance,2917
+2026-04-01,Expense,HealthInsurance,2936
+2026-05-01,Expense,HealthInsurance,2955
+2026-06-01,Expense,HealthInsurance,2974
+2026-07-01,Expense,HealthInsurance,2993
+2026-08-01,Expense,HealthInsurance,3013
+2026-09-01,Expense,HealthInsurance,3032
+2026-10-01,Expense,HealthInsurance,3052
+2025-11-01,Expense,HouseholdHelp,3439
+2025-12-01,Expense,HouseholdHelp,3476
+2026-01-01,Expense,HouseholdHelp,3894
+2026-02-01,Expense,HouseholdHelp,3725
+2026-03-01,Expense,HouseholdHelp,3352
+2026-04-01,Expense,HouseholdHelp,4018
+2026-05-01,Expense,HouseholdHelp,3941
+2026-06-01,Expense,HouseholdHelp,3771
+2026-07-01,Expense,HouseholdHelp,3673
+2026-08-01,Expense,HouseholdHelp,4120
+2026-09-01,Expense,HouseholdHelp,4047
+2026-10-01,Expense,HouseholdHelp,4476
+2025-11-01,Expense,Shopping,4951
+2025-12-01,Expense,Shopping,6432
+2026-02-01,Expense,Shopping,4277
+2026-04-01,Expense,Shopping,362
+2026-05-01,Expense,Shopping,7707
+2026-06-01,Expense,Shopping,4123
+2026-09-01,Expense,Shopping,3682
+2025-12-01,Expense,Entertainment,258
+2026-02-01,Expense,Entertainment,1558
+2026-03-01,Expense,Entertainment,1919
+2026-06-01,Expense,Entertainment,1264
+2026-07-01,Expense,Entertainment,1533
+2026-08-01,Expense,Entertainment,451
+2026-10-01,Expense,Entertainment,2377
+2025-11-01,Expense,GiftsDonations,1316
+2025-12-01,Expense,GiftsDonations,2128
+2026-01-01,Expense,GiftsDonations,178
+2026-02-01,Expense,GiftsDonations,3564
+2026-05-01,Expense,GiftsDonations,2182
+2026-08-01,Expense,GiftsDonations,1332
+2026-09-01,Expense,GiftsDonations,3279
+2026-10-01,Expense,GiftsDonations,4827
+2025-11-01,Expense,HomeRepairs,3040
+2025-12-01,Expense,HomeRepairs,350
+2026-03-01,Expense,HomeRepairs,1354
+2026-07-01,Expense,HomeRepairs,2375
+2026-08-01,Expense,HomeRepairs,260
+2026-10-01,Expense,HomeRepairs,1961
+2025-11-01,Expense,Courses,5914
+2026-04-01,Expense,Courses,6782
+2026-10-01,Expense,Courses,3252
+2025-11-01,Expense,Miscellaneous,2901
+2025-12-01,Expense,Miscellaneous,4415
+2026-01-01,Expense,Miscellaneous,2185
+2026-03-01,Expense,Miscellaneous,4506
+2026-04-01,Expense,Miscellaneous,1811
+2026-05-01,Expense,Miscellaneous,1268
+2026-07-01,Expense,Miscellaneous,4413
+2026-09-01,Expense,Miscellaneous,5331
+2026-10-01,Expense,Miscellaneous,2435
